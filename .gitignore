@@ -1,0 +1,7 @@
+*.exe
+*.ppm
+*.json
+
+parserExample.c
+intersectionExample.c
+TODO.txt
