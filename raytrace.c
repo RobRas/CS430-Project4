@@ -214,6 +214,9 @@ void parseObject(FILE* json, int currentObject, int objectType) {
     objects[currentObject]->specularColor[0] = 0;
     objects[currentObject]->specularColor[1] = 0;
     objects[currentObject]->specularColor[2] = 0;
+    objects[currentObject]->reflectivity = 0;
+    objects[currentObject]->refractivity = 0;
+    objects[currentObject]->ior = 0;
   }
 
   if (objectType == LIGHT) {
