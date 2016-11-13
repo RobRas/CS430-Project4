@@ -27,6 +27,9 @@ typedef struct {
   double diffuseColor[3];
   double specularColor[3];
   double position[3];
+  double reflectivity;
+  double refractivity;
+  double ior;
   union {
     struct {
       double normal[3];
@@ -399,6 +402,30 @@ void parseObject(FILE* json, int currentObject, int objectType) {
         if (objectType == LIGHT) {
           double theta = nextNumber(json);
           lights[currentObject]->theta = theta;
+        } else {
+          fprintf(stderr, "Error: Improper object field on line %d", line);
+          exit(1);
+        }
+      } else if (strcmp(key, "reflectivity") == 0) {
+        if (objectType == PLANE || objectType == SPHERE) {
+          double reflectivity = nextNumber(json);
+          objects[currentObject]->reflectivity = reflectivity;
+        } else {
+          fprintf(stderr, "Error: Improper object field on line %d", line);
+          exit(1);
+        }
+      }  else if (strcmp(key, "refractivity") == 0) {
+        if (objectType == PLANE || objectType == SPHERE) {
+          double refractivity = nextNumber(json);
+          objects[currentObject]->refractivity = refractivity;
+        } else {
+          fprintf(stderr, "Error: Improper object field on line %d", line);
+          exit(1);
+        }
+      }  else if (strcmp(key, "ior") == 0) {
+        if (objectType == PLANE || objectType == SPHERE) {
+          double ior = nextNumber(json);
+          objects[currentObject]->ior = ior;
         } else {
           fprintf(stderr, "Error: Improper object field on line %d", line);
           exit(1);
