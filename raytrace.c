@@ -610,6 +610,150 @@ double specularReflection(double Ks, double Il, const double* V, const double* R
   }
 }
 
+void raytrace(const double* Ro, const double* Rd, double* outColor) {
+  double closestT = INFINITY;
+  Object* closestObject = NULL;
+  for (int i = 0; objects[i] != NULL; i++) {
+    double t = 0;
+
+    switch(objects[i]->kind) {
+      case PLANE:
+        t = planeIntersection(Ro, Rd,
+          objects[i]->position,
+          objects[i]->plane.normal);
+        break;
+      case SPHERE:
+        t = sphereIntersection(Ro, Rd,
+          objects[i]->position,
+          objects[i]->sphere.radius);
+        break;
+      default:
+        fprintf(stderr, "Error: Object does not have an appropriate kind.");
+        exit(1);
+    }
+
+    if (t > 0 && t < closestT) {
+      closestT = t;
+      closestObject = objects[i];
+    }
+  }
+
+  if (closestT < INFINITY) {
+    double color[3];
+    color[0] = 0;
+    color[1] = 0;
+    color[2] = 0;
+
+    for (int i = 0; lights[i] != NULL; i++) {
+      double RoNew[3] = {
+        closestT * Rd[0] + Ro[0],
+        closestT * Rd[1] + Ro[1],
+        closestT * Rd[2] + Ro[2]
+      };
+      double RdNew[3] = {
+        lights[i]->position[0] - RoNew[0],
+        lights[i]->position[1] - RoNew[1],
+        lights[i]->position[2] - RoNew[2]
+      };
+
+      normalize(RdNew);
+
+      int shadow = 0;
+      for (int j = 0; objects[j] != NULL; j++) {
+        double t = 0;
+        if (objects[j] == closestObject) continue;
+        switch(objects[j]->kind) {
+          case PLANE:
+            t = planeIntersection(RoNew, RdNew,
+              objects[j]->position,
+              objects[j]->plane.normal);
+            break;
+          case SPHERE:
+            t = sphereIntersection(RoNew, RdNew,
+              objects[j]->position,
+              objects[j]->sphere.radius);
+            break;
+          default:
+            fprintf(stderr, "Error: Object does not have an appropriate kind.");
+            exit(1);
+        }
+        if (t > 0 && t < magnitude(RdNew)) {
+          shadow = 1;
+          break;
+        }
+      }
+
+      if (shadow == 0) {
+        double N[3];
+        if (closestObject->kind == PLANE) {
+          N[0] = closestObject->plane.normal[0];
+          N[1] = closestObject->plane.normal[1];
+          N[2] = closestObject->plane.normal[2];
+        } else if (closestObject->kind == SPHERE) {
+          N[0] = RoNew[0] - closestObject->position[0];
+          N[1] = RoNew[1] - closestObject->position[1];
+          N[2] = RoNew[2] - closestObject->position[2];
+        }
+
+        normalize(N);
+        double L[3] = {
+          RdNew[0],
+          RdNew[1],
+          RdNew[2]
+        };
+        normalize(L);
+        double LNeg[3] = {
+          -L[0],
+          -L[1],
+          -L[2]
+        };
+        double R[3];
+        reflect(L, N, R);
+        double V[3] = {
+          Rd[0],
+          Rd[1],
+          Rd[2]
+        };
+
+        double pos[3] = {
+          lights[i]->position[0],
+          lights[i]->position[1],
+          lights[i]->position[2]
+        };
+        subtract(pos, RoNew);
+        double d = magnitude(pos);
+
+        double col;
+        for (int c = 0; c < 3; c++) {
+          col = 1;
+          if (lights[i]->angularAtten != INFINITY && lights[i]->theta != 0) {
+            col *= angularAttenuation(LNeg, lights[i]->direction, lights[i]->angularAtten, degreesToRads(lights[i]->theta));
+          }
+          if (lights[i]->radialAtten[0] != INFINITY) {
+            col *= radialAttenuation(lights[i]->radialAtten[2], lights[i]->radialAtten[1], lights[i]->radialAtten[0], d);
+          }
+          col *= (diffuseReflection(closestObject->diffuseColor[c], lights[i]->color[c], N, L) + (specularReflection(closestObject->specularColor[c], lights[i]->color[c], V, R, N, L, 20)));
+          color[c] += col;
+        }
+      }
+    }
+
+    if (closestObject != NULL) {
+      outColor[0] = (unsigned char)(clamp(color[0], 0, 1) * MAX_COLOR_VALUE);
+      outColor[1] = (unsigned char)(clamp(color[1], 0, 1) * MAX_COLOR_VALUE);
+      outColor[2] = (unsigned char)(clamp(color[2], 0, 1) * MAX_COLOR_VALUE);
+    } else {
+      outColor[0] = 0;
+      outColor[1] = 0;
+      outColor[2] = 0;
+    }
+  } else {
+    outColor[0] = 0;
+    outColor[1] = 0;
+    outColor[2] = 0;
+  }
+}
+
 void createScene(int width, int height) {
   double cx = 0;
   double cy = 0;
@@ -632,146 +776,12 @@ void createScene(int width, int height) {
       };
       normalize(Rd);
 
-      double closestT = INFINITY;
-      Object* closestObject = NULL;
-      for (int i = 0; objects[i] != NULL; i++) {
-        double t = 0;
+      double color[3];
+      raytrace(Ro, Rd, color);
 
-        switch(objects[i]->kind) {
-          case PLANE:
-            t = planeIntersection(Ro, Rd,
-              objects[i]->position,
-              objects[i]->plane.normal);
-            break;
-          case SPHERE:
-            t = sphereIntersection(Ro, Rd,
-              objects[i]->position,
-              objects[i]->sphere.radius);
-            break;
-          default:
-            fprintf(stderr, "Error: Object does not have an appropriate kind.");
-            exit(1);
-        }
-
-        if (t > 0 && t < closestT) {
-          closestT = t;
-          closestObject = objects[i];
-        }
-      }
-
-      if (closestT < INFINITY) {
-        double color[3];
-        color[0] = 0;
-        color[1] = 0;
-        color[2] = 0;
-
-        for (int i = 0; lights[i] != NULL; i++) {
-          double RoNew[3] = {
-            closestT * Rd[0] + Ro[0],
-            closestT * Rd[1] + Ro[1],
-            closestT * Rd[2] + Ro[2]
-          };
-          double RdNew[3] = {
-            lights[i]->position[0] - RoNew[0],
-            lights[i]->position[1] - RoNew[1],
-            lights[i]->position[2] - RoNew[2]
-          };
-
-          normalize(RdNew);
-
-          int shadow = 0;
-          for (int j = 0; objects[j] != NULL; j++) {
-            double t = 0;
-            if (objects[j] == closestObject) continue;
-            switch(objects[j]->kind) {
-              case PLANE:
-                t = planeIntersection(RoNew, RdNew,
-                  objects[j]->position,
-                  objects[j]->plane.normal);
-                break;
-              case SPHERE:
-                t = sphereIntersection(RoNew, RdNew,
-                  objects[j]->position,
-                  objects[j]->sphere.radius);
-                break;
-              default:
-                fprintf(stderr, "Error: Object does not have an appropriate kind.");
-                exit(1);
-            }
-            if (t > 0 && t < magnitude(RdNew)) {
-              shadow = 1;
-              break;
-            }
-          }
-
-          if (shadow == 0) {
-            double N[3];
-            if (closestObject->kind == PLANE) {
-              N[0] = closestObject->plane.normal[0];
-              N[1] = closestObject->plane.normal[1];
-              N[2] = closestObject->plane.normal[2];
-            } else if (closestObject->kind == SPHERE) {
-              N[0] = RoNew[0] - closestObject->position[0];
-              N[1] = RoNew[1] - closestObject->position[1];
-              N[2] = RoNew[2] - closestObject->position[2];
-            }
-
-            normalize(N);
-            double L[3] = {
-              RdNew[0],
-              RdNew[1],
-              RdNew[2]
-            };
-            normalize(L);
-            double LNeg[3] = {
-              -L[0],
-              -L[1],
-              -L[2]
-            };
-            double R[3];
-            reflect(L, N, R);
-            double V[3] = {
-              Rd[0],
-              Rd[1],
-              Rd[2]
-            };
-
-            double pos[3] = {
-              lights[i]->position[0],
-              lights[i]->position[1],
-              lights[i]->position[2]
-            };
-            subtract(pos, RoNew);
-            double d = magnitude(pos);
-
-            double col;
-            for (int c = 0; c < 3; c++) {
-              col = 1;
-              if (lights[i]->angularAtten != INFINITY && lights[i]->theta != 0) {
-                col *= angularAttenuation(LNeg, lights[i]->direction, lights[i]->angularAtten, degreesToRads(lights[i]->theta));
-              }
-              if (lights[i]->radialAtten[0] != INFINITY) {
-                col *= radialAttenuation(lights[i]->radialAtten[2], lights[i]->radialAtten[1], lights[i]->radialAtten[0], d);
-              }
-              col *= (diffuseReflection(closestObject->diffuseColor[c], lights[i]->color[c], N, L) + (specularReflection(closestObject->specularColor[c], lights[i]->color[c], V, R, N, L, 20)));
-              color[c] += col;
-            }
-          }
-        }
-        if (closestObject != NULL) {
-          pixmap[(M - 1) * N - (y * N) + x].r = (unsigned char)(clamp(color[0], 0, 1) * MAX_COLOR_VALUE);
-          pixmap[(M - 1) * N - (y * N) + x].g = (unsigned char)(clamp(color[1], 0, 1) * MAX_COLOR_VALUE);
-          pixmap[(M - 1) * N - (y * N) + x].b = (unsigned char)(clamp(color[2], 0, 1) * MAX_COLOR_VALUE);
-        }  else {
-            pixmap[(M - 1) * N - (y * N) + x].r = 0;
-            pixmap[(M - 1) * N - (y * N) + x].g = 0;
-            pixmap[(M - 1) * N - (y * N) + x].b = 0;
-          }
-    } else {
-        pixmap[(M - 1) * N - (y * N) + x].r = 0;
-        pixmap[(M - 1) * N - (y * N) + x].g = 0;
-        pixmap[(M - 1) * N - (y * N) + x].b = 0;
-      }
+      pixmap[(M - 1) * N - (y * N) + x].r = color[0];
+      pixmap[(M - 1) * N - (y * N) + x].g = color[1];
+      pixmap[(M - 1) * N - (y * N) + x].b = color[2];
     }
   }
 }
