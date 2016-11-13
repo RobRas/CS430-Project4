@@ -610,10 +610,12 @@ double specularReflection(double Ks, double Il, const double* V, const double* R
   }
 }
 
-void raytrace(const double* Ro, const double* Rd, double* outColor) {
+void raytrace(const double* Ro, const double* Rd, const Object* ignore, double* outColor, int iteration) {
   double closestT = INFINITY;
   Object* closestObject = NULL;
   for (int i = 0; objects[i] != NULL; i++) {
+    if (objects[i] == ignore) continue;
+
     double t = 0;
 
     switch(objects[i]->kind) {
@@ -638,6 +640,12 @@ void raytrace(const double* Ro, const double* Rd, double* outColor) {
     }
   }
 
+  double RoNew[3] = {
+    closestT * Rd[0] + Ro[0],
+    closestT * Rd[1] + Ro[1],
+    closestT * Rd[2] + Ro[2]
+  };
+
   if (closestT < INFINITY) {
     double color[3];
     color[0] = 0;
@@ -645,17 +653,11 @@ void raytrace(const double* Ro, const double* Rd, double* outColor) {
     color[2] = 0;
 
     for (int i = 0; lights[i] != NULL; i++) {
-      double RoNew[3] = {
-        closestT * Rd[0] + Ro[0],
-        closestT * Rd[1] + Ro[1],
-        closestT * Rd[2] + Ro[2]
-      };
       double RdNew[3] = {
         lights[i]->position[0] - RoNew[0],
         lights[i]->position[1] - RoNew[1],
         lights[i]->position[2] - RoNew[2]
       };
-
       normalize(RdNew);
 
       int shadow = 0;
@@ -732,11 +734,36 @@ void raytrace(const double* Ro, const double* Rd, double* outColor) {
           if (lights[i]->radialAtten[0] != INFINITY) {
             col *= radialAttenuation(lights[i]->radialAtten[2], lights[i]->radialAtten[1], lights[i]->radialAtten[0], d);
           }
-          col *= (diffuseReflection(closestObject->diffuseColor[c], lights[i]->color[c], N, L) + (specularReflection(closestObject->specularColor[c], lights[i]->color[c], V, R, N, L, 20)));
+          col *= (diffuseReflection(closestObject->diffuseColor[c], lights[i]->color[c], N, L) + specularReflection(closestObject->specularColor[c], lights[i]->color[c], V, R, N, L, 20));
           color[c] += col;
         }
       }
     }
+
+    if (iteration > 0) {
+      double N[3];
+      if (closestObject->kind == PLANE) {
+        N[0] = closestObject->plane.normal[0];
+        N[1] = closestObject->plane.normal[1];
+        N[2] = closestObject->plane.normal[2];
+      } else if (closestObject->kind == SPHERE) {
+        N[0] = RoNew[0] - closestObject->position[0];
+        N[1] = RoNew[1] - closestObject->position[1];
+        N[2] = RoNew[2] - closestObject->position[2];
+      }
+      normalize(N);
+      double RdNew[3];
+      reflect(Rd, N, RdNew);
+      normalize(RdNew);
+
+      double reflectionColor[3];
+      raytrace(RoNew, RdNew, closestObject, reflectionColor, iteration - 1);
+
+      for (int i = 0; i < 3; i++) {
+        color[i] += closestObject->reflectivity * reflectionColor[i];
+      }
+    }
+
 
     if (closestObject != NULL) {
       outColor[0] = (unsigned char)(clamp(color[0], 0, 1) * MAX_COLOR_VALUE);
@@ -777,7 +804,7 @@ void createScene(int width, int height) {
       normalize(Rd);
 
       double color[3];
-      raytrace(Ro, Rd, color);
+      raytrace(Ro, Rd, NULL, color, 7);
 
       pixmap[(M - 1) * N - (y * N) + x].r = color[0];
       pixmap[(M - 1) * N - (y * N) + x].g = color[1];
