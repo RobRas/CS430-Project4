@@ -58,6 +58,10 @@ static inline double degreesToRads(double d) {
   return d * 0.0174533;
 }
 
+static inline double radsToDegrees(double d) {
+  return d * 57.2958;
+}
+
 static inline double sqr(double v) {
   return v*v;
 }
@@ -108,6 +112,24 @@ void reflect(const double* v, const double* n, double* r) {
   r[1] = v[1];
   r[2] = v[2];
   subtract(r, nNew);
+}
+
+void refract(const double* V, const double* N, double ior, double* R) {
+  //double angle = acos(dot(V, R));
+  //double result = sin(angle) / ior;
+  //result = asin(result);
+
+  float dotResult = dot(N, V);
+  float k = 1.0 - ior * ior * (1.0 - dotResult * dotResult);
+  if (k < 0.0) {
+    R[0] = 0;
+    R[1] = 0;
+    R[2] = 0;
+  } else {
+    for (int i = 0; i < 3; i++) {
+      R[i] = ior * V[i] - (ior * dotResult + sqrt(k) * N[i]);
+    }
+  }
 }
 
 void negate(double* v) {
@@ -752,14 +774,23 @@ void raytrace(const double* Ro, const double* Rd, const double* RdCamera, const 
       }
       normalize(N);
       double RdNew[3];
-      reflect(Rd, N, RdNew);
-      normalize(RdNew);
 
       double reflectionColor[3];
-      raytrace(RoNew, RdNew, RdCamera, closestObject, reflectionColor, iteration - 1);
+      if (closestObject->reflectivity > 0) {
+        reflect(Rd, N, RdNew);
+        normalize(RdNew);
+        raytrace(RoNew, RdNew, RdCamera, closestObject, reflectionColor, iteration - 1);
+      }
+
+      double refractionColor[3];
+      if (closestObject->refractivity > 0) {
+        refract(Rd, N, closestObject->ior, RdNew);
+        normalize(RdNew);
+        raytrace(RoNew, RdNew, RdCamera, closestObject, refractionColor, iteration - 1);
+      }
 
       for (int i = 0; i < 3; i++) {
-        color[i] += closestObject->reflectivity * reflectionColor[i];
+        color[i] += closestObject->reflectivity * reflectionColor[i] + closestObject->refractivity * refractionColor[i];
       }
     }
 
