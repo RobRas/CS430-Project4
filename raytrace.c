@@ -68,6 +68,9 @@ static inline double sqr(double v) {
 
 static inline void normalize(double* v) {
   double len = sqrt(sqr(v[0]) + sqr(v[1]) + sqr(v[2]));
+  if (len == 0) {
+    return;
+  }
   v[0] /= len;
   v[1] /= len;
   v[2] /= len;
@@ -115,20 +118,45 @@ void reflect(const double* v, const double* n, double* r) {
 }
 
 void refract(const double* V, const double* N, double ior, double* R) {
-  //double angle = acos(dot(V, R));
+  double angle = acos(dot(V, R));
   //double result = sin(angle) / ior;
   //result = asin(result);
 
-  float dotResult = dot(N, V);
-  float k = 1.0 - ior * ior * (1.0 - dotResult * dotResult);
-  if (k < 0.0) {
-    R[0] = 0;
-    R[1] = 0;
-    R[2] = 0;
-  } else {
-    for (int i = 0; i < 3; i++) {
-      R[i] = ior * V[i] - (ior * dotResult + sqrt(k) * N[i]);
-    }
+  // float dotResult = dot(N, V);
+  // float k = 1.0 - sqr(ior) * (1.0 - sqr(dotResult));
+  // if (k < 0.0) {
+  //   R[0] = 0;
+  //   R[1] = 0;
+  //   R[2] = 0;
+  //   return 0;
+  // } else {
+  //   for (int i = 0; i < 3; i++) {
+  //     R[i] = ior * V[i] - (ior * dotResult + sqrt(k) * N[i]);
+  //   }
+  //   return 1;
+  // }
+
+  double sin2ThetaT = sqr(1 / ior) * (1 - sqr(cos(angle)));
+
+  double nNew[3] = {
+    N[0],
+    N[1],
+    N[2]
+  };
+
+  double lhs = (1 / ior) * cos(angle) - sqrt(1 - sin2ThetaT);
+  scale(nNew, lhs);
+
+  double vNew[3] = {
+    V[0],
+    V[1],
+    V[2]
+  };
+
+  scale(vNew, (1 / ior));
+
+  for (int i = 0; i < 3; i++) {
+    R[i] = vNew[i] + nNew[i];
   }
 }
 
