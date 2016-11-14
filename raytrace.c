@@ -610,7 +610,7 @@ double specularReflection(double Ks, double Il, const double* V, const double* R
   }
 }
 
-void raytrace(const double* Ro, const double* Rd, const Object* ignore, double* outColor, int iteration) {
+void raytrace(const double* Ro, const double* Rd, const double* RdCamera, const Object* ignore, double* outColor, int iteration) {
   double closestT = INFINITY;
   Object* closestObject = NULL;
   for (int i = 0; objects[i] != NULL; i++) {
@@ -712,9 +712,9 @@ void raytrace(const double* Ro, const double* Rd, const Object* ignore, double* 
         double R[3];
         reflect(L, N, R);
         double V[3] = {
-          Rd[0],
-          Rd[1],
-          Rd[2]
+          RdCamera[0],
+          RdCamera[1],
+          RdCamera[2]
         };
 
         double pos[3] = {
@@ -725,9 +725,8 @@ void raytrace(const double* Ro, const double* Rd, const Object* ignore, double* 
         subtract(pos, RoNew);
         double d = magnitude(pos);
 
-        double col;
         for (int c = 0; c < 3; c++) {
-          col = 1;
+          double col = 1;
           if (lights[i]->angularAtten != INFINITY && lights[i]->theta != 0) {
             col *= angularAttenuation(LNeg, lights[i]->direction, lights[i]->angularAtten, degreesToRads(lights[i]->theta));
           }
@@ -757,7 +756,7 @@ void raytrace(const double* Ro, const double* Rd, const Object* ignore, double* 
       normalize(RdNew);
 
       double reflectionColor[3];
-      raytrace(RoNew, RdNew, closestObject, reflectionColor, iteration - 1);
+      raytrace(RoNew, RdNew, RdCamera, closestObject, reflectionColor, iteration - 1);
 
       for (int i = 0; i < 3; i++) {
         color[i] += closestObject->reflectivity * reflectionColor[i];
@@ -766,9 +765,9 @@ void raytrace(const double* Ro, const double* Rd, const Object* ignore, double* 
 
 
     if (closestObject != NULL) {
-      outColor[0] = (unsigned char)(clamp(color[0], 0, 1) * MAX_COLOR_VALUE);
-      outColor[1] = (unsigned char)(clamp(color[1], 0, 1) * MAX_COLOR_VALUE);
-      outColor[2] = (unsigned char)(clamp(color[2], 0, 1) * MAX_COLOR_VALUE);
+      outColor[0] = clamp(color[0], 0, 1);
+      outColor[1] = clamp(color[1], 0, 1);
+      outColor[2] = clamp(color[2], 0, 1);
     } else {
       outColor[0] = 0;
       outColor[1] = 0;
@@ -804,11 +803,11 @@ void createScene(int width, int height) {
       normalize(Rd);
 
       double color[3];
-      raytrace(Ro, Rd, NULL, color, 7);
+      raytrace(Ro, Rd, Rd, NULL, color, 7);
 
-      pixmap[(M - 1) * N - (y * N) + x].r = color[0];
-      pixmap[(M - 1) * N - (y * N) + x].g = color[1];
-      pixmap[(M - 1) * N - (y * N) + x].b = color[2];
+      pixmap[(M - 1) * N - (y * N) + x].r = (unsigned char)(color[0] * MAX_COLOR_VALUE);
+      pixmap[(M - 1) * N - (y * N) + x].g = (unsigned char)(color[1] * MAX_COLOR_VALUE);
+      pixmap[(M - 1) * N - (y * N) + x].b = (unsigned char)(color[2] * MAX_COLOR_VALUE);
     }
   }
 }
