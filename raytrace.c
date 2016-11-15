@@ -817,7 +817,11 @@ void raytrace(const double* Ro, const double* Rd, const double* RdCamera, const 
         raytrace(RoNew, RdNew, RdCamera, closestObject, refractionColor, iteration - 1);
       }
 
+      float transparency = closestObject->reflectivity + closestObject->refractivity;
+      transparency = 1 - transparency;
+
       for (int i = 0; i < 3; i++) {
+        color[i] *= transparency;
         color[i] += closestObject->reflectivity * reflectionColor[i] + closestObject->refractivity * refractionColor[i];
       }
     }
